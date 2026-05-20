@@ -1,0 +1,8 @@
+{
+  "name": "diplom",
+  "private": true,
+  "workspaces": [
+    "servers/*",
+    "shared"
+  ]
+}
