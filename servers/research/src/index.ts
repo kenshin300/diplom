@@ -9,8 +9,6 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const LOGINOM_CACHE_FILE = path.join(__dirname, "..", "company_cache.json");
 
-// --- Loginom cache ---
-
 interface LoginomCache {
   fetched_at: string;
   data: Record<string, string>;
@@ -30,7 +28,6 @@ async function saveLoginomCache(data: Record<string, string>): Promise<void> {
   await fs.writeFile(LOGINOM_CACHE_FILE, JSON.stringify(cache, null, 2));
 }
 
-// --- HTTP fetch helper ---
 
 async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, {
@@ -69,14 +66,12 @@ function extractStructured(html: string): string {
   return lines.join("\n").slice(0, 6000);
 }
 
-// --- Server ---
 
 const server = new McpServer({
   name: "research",
   version: "1.0.0",
 });
 
-// Tool 1: get links from a page
 server.registerTool(
   "get_page_links",
   {
@@ -100,7 +95,6 @@ server.registerTool(
           links.push(resolved.href);
         }
       } catch {
-        // ignore malformed hrefs
       }
     });
 
@@ -111,7 +105,6 @@ server.registerTool(
   }
 );
 
-// Tool 2: fetch page text content
 server.registerTool(
   "fetch_page",
   {
@@ -134,7 +127,6 @@ server.registerTool(
   }
 );
 
-// Tool 3: get financial data from checko.ru by INN
 server.registerTool(
   "get_company_finances",
   {
@@ -146,22 +138,64 @@ server.registerTool(
     },
   },
   async ({ inn }) => {
-    const companyUrl = `https://checko.ru/company/${inn}`;
-    const companyHtml = await fetchHtml(companyUrl);
-    const text = extractStructured(companyHtml);
+    const apiKey = process.env.CHECKO_API_KEY;
+    if (!apiKey) {
+      throw new Error("CHECKO_API_KEY is not set in the environment");
+    }
+
+    const apiUrl = `https://api.checko.ru/v2/finances?key=${apiKey}&inn=${inn}`;
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for checko.ru API`);
+    const json: any = await res.json();
+
+    if (!json.company || !json.data) {
+      throw new Error(
+        `checko.ru: данные по ИНН ${inn} не найдены (${json?.meta?.message ?? "пусто"})`
+      );
+    }
+
+    const company = json.company;
+    const years = Object.keys(json.data).sort((a, b) => a.localeCompare(b));
+
+    const METRICS: Record<string, string> = {
+      "2110": "Выручка",
+      "2400": "Чистая прибыль (убыток)",
+      "1600": "Активы (баланс)",
+      "1300": "Капитал и резервы",
+      "1400": "Долгосрочные обязательства",
+      "1500": "Краткосрочные обязательства",
+    };
+
+    const fmt = (n: number) => Math.round(n).toLocaleString("ru-RU");
+
+    const lines: string[] = [
+      `# ${company["НаимПолн"] ?? company["НаимСокр"]}`,
+      `ОГРН: ${company["ОГРН"]}, ИНН: ${company["ИНН"]}, статус: ${company["Статус"]}`,
+      `Адрес: ${company["ЮрАдрес"]}`,
+      `Вид деятельности: ${company["ОКВЭД"]}`,
+      "",
+      "## Финансовые показатели по годам (руб.)",
+    ];
+
+    for (const year of years) {
+      const yearData = json.data[year];
+      const parts = Object.entries(METRICS).map(
+        ([code, label]) => `${label}: ${fmt(yearData[code] ?? 0)}`
+      );
+      lines.push(`### ${year}`, parts.join(", "));
+    }
 
     return {
       content: [
         {
           type: "text",
-          text: `Source: ${companyUrl}\n\n${text}`,
+          text: `Source: checko.ru API (ИНН ${inn})\n\n${lines.join("\n")}`,
         },
       ],
     };
   }
 );
 
-// Tool 4: get Loginom company info (cached)
 server.registerTool(
   "get_loginom_info",
   {
@@ -192,18 +226,16 @@ server.registerTool(
 
     const BASE = "https://loginom.ru";
 
-    // URL segments worth crawling — covers company info, product, cases, solutions, services
     const USEFUL_PATTERNS = [
-      /^\/$/, // main page
+      /^\/$/,
       /^\/(platform|product)/,
       /^\/(solutions|blog|cases|client)/,
       /^\/(services|about|company)/,
       /^\/(partners|integrations|marketplace)/,
       /^\/(bank|finance|retail|logistic|medical)/,
-      // pricing/editions excluded — causes confusion with custom dev project costs
+
     ];
 
-    // Step 1: collect all internal links from the main page
     const mainHtml = await fetchHtml(BASE);
     const $main = cheerio.load(mainHtml);
     const discovered = new Set<string>();
@@ -216,19 +248,16 @@ server.registerTool(
           discovered.add(url.pathname);
         }
       } catch {
-        // ignore
       }
     });
 
-    // Step 2: filter by useful patterns
     const toFetch = [
       BASE,
       ...[...discovered]
         .filter((p) => USEFUL_PATTERNS.some((re) => re.test(p)))
         .map((p) => `${BASE}${p}`),
-    ].slice(0, 20); // cap at 20 pages
+    ].slice(0, 20); 
 
-    // Step 3: fetch each page
     const results: Record<string, string> = {};
 
     for (const pageUrl of toFetch) {

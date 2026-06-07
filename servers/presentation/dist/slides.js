@@ -99,10 +99,45 @@ export function slide3Solution(// eslint-disable-next-line @typescript-eslint/no
 pptx, d) {
     const s = pptx.addSlide();
     blueHeader(s, "Предлагаемое решение");
-    s.addShape("rect", { x: 0.4, y: 1.2, w: 12.5, h: 5.5, fill: { color: C.light }, line: { color: "E2E5EA", width: 1 } });
+    // Left dark concept panel
+    s.addShape("rect", { x: 0, y: 1.1, w: 4.5, h: 6.4, fill: { color: C.dark } });
+    s.addShape("rect", { x: 0.4, y: 1.5, w: 1.8, h: 0.06, fill: { color: C.red } });
+    s.addText("Концепция", {
+        x: 0.4, y: 1.65, w: 3.7, h: 0.5,
+        fontSize: 14, bold: true, color: C.red,
+    });
     s.addText(d.solution_description, {
-        x: 0.7, y: 1.4, w: 12, h: 5.1,
-        fontSize: 14, color: C.dark, lineSpacingMultiple: 1.4,
+        x: 0.4, y: 2.3, w: 3.7, h: 5,
+        fontSize: 11, color: "C0C6D0", lineSpacingMultiple: 1.55,
+    });
+    // Right: phase cards
+    const phases = d.solution_phases.slice(0, 4);
+    const rightX = 4.85;
+    const rightW = 8.1;
+    const gap = 0.18;
+    const cols = phases.length === 4 ? 2 : 1;
+    const rows = Math.ceil(phases.length / cols);
+    const cardW = cols === 2 ? (rightW - gap) / 2 : rightW;
+    const cardH = (6.1 - gap * (rows - 1)) / rows;
+    phases.forEach((phase, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = rightX + col * (cardW + gap);
+        const y = 1.22 + row * (cardH + gap);
+        s.addShape("rect", { x, y, w: cardW, h: cardH, fill: { color: C.light }, line: { color: "E2E5EA", width: 1 } });
+        s.addShape("rect", { x, y, w: cardW, h: 0.07, fill: { color: C.red } });
+        s.addText(String(i + 1).padStart(2, "0"), {
+            x: x + 0.2, y: y + 0.18, w: 0.65, h: 0.55,
+            fontSize: 22, bold: true, color: C.red,
+        });
+        s.addText(phase.title, {
+            x: x + 1, y: y + 0.18, w: cardW - 1.2, h: 0.6,
+            fontSize: 12, bold: true, color: C.dark, valign: "middle",
+        });
+        s.addText(phase.description, {
+            x: x + 0.2, y: y + 0.88, w: cardW - 0.4, h: cardH - 1.05,
+            fontSize: 11, color: C.dark, lineSpacingMultiple: 1.4,
+        });
     });
 }
 // ─── Slide 4 — Why Loginom ───────────────────────────────────────────────────
@@ -110,23 +145,26 @@ export function slide4WhyUs(// eslint-disable-next-line @typescript-eslint/no-ex
 pptx, d) {
     const s = pptx.addSlide();
     blueHeader(s, "Почему Loginom");
+    // Light page background
+    s.addShape("rect", { x: 0, y: 1.1, w: "100%", h: 6.4, fill: { color: "F4F5F7" } });
     const args = d.fit_arguments.slice(0, 5);
-    const cols = args.length > 3 ? 2 : 1;
-    const perCol = Math.ceil(args.length / cols);
-    const colW = cols === 2 ? 6.1 : 12.5;
+    const cardH = 1.08;
+    const gap = 0.12;
     args.forEach((arg, i) => {
-        const col = Math.floor(i / perCol);
-        const row = i % perCol;
-        const x = 0.4 + col * 6.6;
-        const y = 1.3 + row * 1.3;
-        s.addShape("rect", { x, y, w: colW, h: 1.1, fill: { color: C.white }, line: { color: "E2E5EA", width: 1 } });
-        s.addShape("rect", { x, y, w: 0.45, h: 1.1, fill: { color: C.dark } });
-        s.addText(`${i + 1}`, {
-            x, y, w: 0.45, h: 1.1,
-            fontSize: 18, bold: true, color: C.white, align: "center", valign: "middle",
+        const y = 1.3 + i * (cardH + gap);
+        // Card
+        s.addShape("rect", { x: 0.5, y, w: 12.3, h: cardH, fill: { color: C.white }, line: { color: "E8EAED", width: 1 } });
+        // Red left accent
+        s.addShape("rect", { x: 0.5, y, w: 0.07, h: cardH, fill: { color: C.red } });
+        // Number badge
+        s.addShape("rect", { x: 0.77, y: y + 0.19, w: 0.7, h: 0.7, fill: { color: C.dark } });
+        s.addText(String(i + 1).padStart(2, "0"), {
+            x: 0.77, y: y + 0.19, w: 0.7, h: 0.7,
+            fontSize: 14, bold: true, color: C.red, align: "center", valign: "middle",
         });
+        // Argument text
         s.addText(arg, {
-            x: x + 0.6, y: y + 0.1, w: colW - 0.75, h: 0.9,
+            x: 1.65, y: y + 0.09, w: 11, h: cardH - 0.18,
             fontSize: 13, color: C.dark, valign: "middle",
         });
     });
@@ -168,10 +206,33 @@ export function slide6About(// eslint-disable-next-line @typescript-eslint/no-ex
 pptx, d) {
     const s = pptx.addSlide();
     blueHeader(s, "О компании Loginom");
-    s.addShape("rect", { x: 0.4, y: 1.2, w: 12.5, h: 5.5, fill: { color: C.light }, line: { color: "E2E5EA", width: 1 } });
+    // Left dark stats panel
+    s.addShape("rect", { x: 0, y: 1.1, w: 4.5, h: 6.4, fill: { color: C.dark } });
+    s.addShape("rect", { x: 0.4, y: 1.5, w: 1.8, h: 0.06, fill: { color: C.red } });
+    s.addText("Ключевые факты", {
+        x: 0.4, y: 1.65, w: 3.7, h: 0.45,
+        fontSize: 13, bold: true, color: C.red,
+    });
+    const stats = d.loginom_stats.slice(0, 4);
+    stats.forEach((stat, i) => {
+        const y = 2.3 + i * 1.25;
+        s.addText(stat.value, {
+            x: 0.4, y, w: 3.7, h: 0.72,
+            fontSize: 30, bold: true, color: C.white,
+        });
+        s.addText(stat.label, {
+            x: 0.4, y: y + 0.72, w: 3.7, h: 0.35,
+            fontSize: 10.5, color: C.gray,
+        });
+        if (i < stats.length - 1) {
+            s.addShape("rect", { x: 0.4, y: y + 1.15, w: 3.2, h: 0.03, fill: { color: "2A3144" } });
+        }
+    });
+    // Right text area
+    s.addShape("rect", { x: 4.75, y: 1.2, w: 8.2, h: 6.1, fill: { color: C.light }, line: { color: "E2E5EA", width: 1 } });
     s.addText(d.loginom_about, {
-        x: 0.7, y: 1.4, w: 12, h: 5.1,
-        fontSize: 13, color: C.dark, lineSpacingMultiple: 1.5,
+        x: 5.05, y: 1.4, w: 7.6, h: 5.7,
+        fontSize: 12, color: C.dark, lineSpacingMultiple: 1.6,
     });
 }
 // ─── Slide 7 — Next steps ────────────────────────────────────────────────────

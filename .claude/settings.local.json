@@ -6,7 +6,9 @@
       "Bash(npx tsc *)",
       "Bash(node /Users/kenshin/files/diplom/servers/order-parser/dist/index.js)",
       "Bash(node -e ' *)",
-      "Bash(node servers/research/dist/index.js)"
+      "Bash(node servers/research/dist/index.js)",
+      "Bash(curl -s \"https://api.checko.ru/v2/company?key=pJ6xJvwLPoH7gCY6&inn=7414003633\")",
+      "Bash(curl -s \"https://api.checko.ru/v2/finances?key=pJ6xJvwLPoH7gCY6&inn=7414003633\")"
     ]
   }
 }

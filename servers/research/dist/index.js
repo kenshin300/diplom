@@ -20,7 +20,6 @@ async function saveLoginomCache(data) {
     const cache = { fetched_at: new Date().toISOString(), data };
     await fs.writeFile(LOGINOM_CACHE_FILE, JSON.stringify(cache, null, 2));
 }
-// --- HTTP fetch helper ---
 async function fetchHtml(url) {
     const res = await fetch(url, {
         headers: {
@@ -52,12 +51,10 @@ function extractStructured(html) {
     $("li").each((_, el) => add("• ", $(el).text()));
     return lines.join("\n").slice(0, 6000);
 }
-// --- Server ---
 const server = new McpServer({
     name: "research",
     version: "1.0.0",
 });
-// Tool 1: get links from a page
 server.registerTool("get_page_links", {
     description: "Fetch a web page and return all internal links found on it. Use this to discover which pages of a site are worth reading.",
     inputSchema: {
@@ -77,7 +74,6 @@ server.registerTool("get_page_links", {
             }
         }
         catch {
-            // ignore malformed hrefs
         }
     });
     const unique = [...new Set(links)].slice(0, 50);
@@ -85,7 +81,6 @@ server.registerTool("get_page_links", {
         content: [{ type: "text", text: JSON.stringify(unique, null, 2) }],
     };
 });
-// Tool 2: fetch page text content
 server.registerTool("fetch_page", {
     description: "Fetch a web page and return its visible text content. Use this to read about pages, services, and contacts.",
     inputSchema: {
@@ -100,7 +95,6 @@ server.registerTool("fetch_page", {
         content: [{ type: "text", text }],
     };
 });
-// Tool 3: get financial data from checko.ru by INN
 server.registerTool("get_company_finances", {
     description: "Fetch financial data for a company from checko.ru using its INN (tax ID). " +
         "Find the INN first by reading the company's website with fetch_page, then call this tool.",
@@ -108,19 +102,51 @@ server.registerTool("get_company_finances", {
         inn: z.string().describe("Company INN (10 or 12 digits)"),
     },
 }, async ({ inn }) => {
-    const companyUrl = `https://checko.ru/company/${inn}`;
-    const companyHtml = await fetchHtml(companyUrl);
-    const text = extractStructured(companyHtml);
+    const apiKey = process.env.CHECKO_API_KEY;
+    if (!apiKey) {
+        throw new Error("CHECKO_API_KEY is not set in the environment");
+    }
+    const apiUrl = `https://api.checko.ru/v2/finances?key=${apiKey}&inn=${inn}`;
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10_000) });
+    if (!res.ok)
+        throw new Error(`HTTP ${res.status} for checko.ru API`);
+    const json = await res.json();
+    if (!json.company || !json.data) {
+        throw new Error(`checko.ru: данные по ИНН ${inn} не найдены (${json?.meta?.message ?? "пусто"})`);
+    }
+    const company = json.company;
+    const years = Object.keys(json.data).sort((a, b) => a.localeCompare(b));
+    const METRICS = {
+        "2110": "Выручка",
+        "2400": "Чистая прибыль (убыток)",
+        "1600": "Активы (баланс)",
+        "1300": "Капитал и резервы",
+        "1400": "Долгосрочные обязательства",
+        "1500": "Краткосрочные обязательства",
+    };
+    const fmt = (n) => Math.round(n).toLocaleString("ru-RU");
+    const lines = [
+        `# ${company["НаимПолн"] ?? company["НаимСокр"]}`,
+        `ОГРН: ${company["ОГРН"]}, ИНН: ${company["ИНН"]}, статус: ${company["Статус"]}`,
+        `Адрес: ${company["ЮрАдрес"]}`,
+        `Вид деятельности: ${company["ОКВЭД"]}`,
+        "",
+        "## Финансовые показатели по годам (руб.)",
+    ];
+    for (const year of years) {
+        const yearData = json.data[year];
+        const parts = Object.entries(METRICS).map(([code, label]) => `${label}: ${fmt(yearData[code] ?? 0)}`);
+        lines.push(`### ${year}`, parts.join(", "));
+    }
     return {
         content: [
             {
                 type: "text",
-                text: `Source: ${companyUrl}\n\n${text}`,
+                text: `Source: checko.ru API (ИНН ${inn})\n\n${lines.join("\n")}`,
             },
         ],
     };
 });
-// Tool 4: get Loginom company info (cached)
 server.registerTool("get_loginom_info", {
     description: "Return information about Loginom Company (our company) from cache or by fetching loginom.ru. " +
         "Use this to understand what services we offer before writing a pitch.",
@@ -145,17 +171,14 @@ server.registerTool("get_loginom_info", {
         }
     }
     const BASE = "https://loginom.ru";
-    // URL segments worth crawling — covers company info, product, cases, solutions, services
     const USEFUL_PATTERNS = [
-        /^\/$/, // main page
+        /^\/$/,
         /^\/(platform|product)/,
         /^\/(solutions|blog|cases|client)/,
         /^\/(services|about|company)/,
         /^\/(partners|integrations|marketplace)/,
         /^\/(bank|finance|retail|logistic|medical)/,
-        // pricing/editions excluded — causes confusion with custom dev project costs
     ];
-    // Step 1: collect all internal links from the main page
     const mainHtml = await fetchHtml(BASE);
     const $main = cheerio.load(mainHtml);
     const discovered = new Set();
@@ -168,17 +191,14 @@ server.registerTool("get_loginom_info", {
             }
         }
         catch {
-            // ignore
         }
     });
-    // Step 2: filter by useful patterns
     const toFetch = [
         BASE,
         ...[...discovered]
             .filter((p) => USEFUL_PATTERNS.some((re) => re.test(p)))
             .map((p) => `${BASE}${p}`),
-    ].slice(0, 20); // cap at 20 pages
-    // Step 3: fetch each page
+    ].slice(0, 20);
     const results = {};
     for (const pageUrl of toFetch) {
         try {

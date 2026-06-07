@@ -47,7 +47,12 @@ server.registerTool(
       problem_context: z.string().describe("Why this problem exists and why it's hard to solve"),
       pain_points: z.array(z.string()).min(1).max(3).describe("What happens if the problem is not solved"),
 
-      solution_description: z.string().describe("Proposed solution architecture and approach"),
+      solution_description: z.string().describe("Proposed solution architecture and approach — 3-5 sentences overview"),
+
+      solution_phases: z.array(z.object({
+        title: z.string().describe("Phase title, e.g. 'Интеграция источников данных'"),
+        description: z.string().describe("What happens in this phase — 2-4 sentences"),
+      })).min(2).max(4).describe("Key implementation phases of the proposed solution (2-4 steps)"),
 
       fit_arguments: z.array(z.string()).min(3).max(5).describe("Why Loginom specifically fits this task"),
 
@@ -61,7 +66,12 @@ server.registerTool(
         .max(3)
         .describe("Relevant cases from loginom.ru that match the client's industry or task"),
 
-      loginom_about: z.string().describe("Short company description from loginom.ru cache — history, scale, expertise"),
+      loginom_about: z.string().describe("Company description from loginom.ru cache — history, scale, expertise, key products"),
+
+      loginom_stats: z.array(z.object({
+        label: z.string().describe("Metric name, e.g. 'Лет на рынке', 'Клиентов', 'Специалистов'"),
+        value: z.string().describe("Metric value with units, e.g. '20+', '500+', '200+'"),
+      })).min(2).max(4).describe("Key Loginom company statistics from loginom.ru — years on market, client count, team size, project count"),
 
       contact_name: z.string().describe("Client contact person name"),
       contact_email: z.string().describe("Client contact email"),
